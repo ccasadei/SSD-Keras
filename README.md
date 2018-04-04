@@ -1,4 +1,4 @@
-# YOLO2-Keras
+# SSD-Keras
 
 Refactory del progetto 
 https://github.com/pierluigiferrari/ssd_keras
