@@ -1,9 +1,11 @@
 # YOLO2-Keras
 
 Refactory del progetto 
-https://github.com/experiencor/basic-yolo-keras
+https://github.com/pierluigiferrari/ssd_keras
 
-Il file `configYOLO.json` contiene la configurazione della rete, delle classi, del training, i dataset, eccetera.
+Il file `configSSD.json` contiene la configurazione della rete, delle classi, del training, i dataset, eccetera.
+
+E' possibile indicare quale tipologia di modello utilizzare (`300` oppure `512`)
 
 Per eseguire il training, lanciare il file `training.py`.
 
