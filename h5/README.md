@@ -7,7 +7,7 @@ Versione 512 (da rinominare in `base512.h5`):
 https://drive.google.com/open?id=1wGc368WyXSHZOv4iow2tri9LnB0vm9X-
 
 
-Il file `pretrained.h5` se esiste è quello che viene caricato all'inizio del training come partenza (è impostato sulle classi indicate in `configYOLO.json`).
+Il file `pretrained.h5` se esiste è quello che viene caricato all'inizio del training come partenza (è impostato sulle classi indicate in `configSSD.json`).
 
 Il file `result.h5` se esiste è quello creato alla fine dell'allenamento.
 
