@@ -4,7 +4,13 @@ from keras.callbacks import ModelCheckpoint, LearningRateScheduler, EarlyStoppin
 def getCallbacks(config):
     # definisco uno scheduler per il learning rate
     def lr_schedule(epoch, decay=0.9):
-        new_lr = config.base_lr * (decay ** epoch)
+        # new_lr = config.base_lr * (decay ** epoch)
+        if epoch < 80:
+            new_lr = config.base_lr
+        elif epoch < 100:
+            new_lr = config.base_lr / 10.
+        else:
+            new_lr = config.base_lr / 100.
         print("Learning Rate: " + str(new_lr))
         return new_lr
 

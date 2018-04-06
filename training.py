@@ -18,7 +18,7 @@ config = Config('configSSD.json')
 wpath = None
 if config.type == '300':
     wpath = config.base_weights_path300
-    model, bodyLayers, predictor_sizes = ssd_300(n_classes=len(config.classes) - 1,
+    model, bodyLayers, predictor_sizes = ssd_300(n_classes=len(config.classes) - 1,  # NOTA: qui tolgo la classe di background nel conteggio
                                                  scales=config.scales,
                                                  aspect_ratios_per_layer=config.aspect_ratios_per_layer,
                                                  steps=config.steps,
@@ -26,7 +26,7 @@ if config.type == '300':
 
 else:
     wpath = config.base_weights_path512
-    model, bodyLayers, predictor_sizes = ssd_512(n_classes=len(config.classes) - 1,
+    model, bodyLayers, predictor_sizes = ssd_512(n_classes=len(config.classes) - 1,  # NOTA: qui tolgo la classe di background nel conteggio
                                                  scales=config.scales,
                                                  aspect_ratios_per_layer=config.aspect_ratios_per_layer,
                                                  steps=config.steps,
