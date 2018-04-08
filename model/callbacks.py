@@ -1,7 +1,7 @@
 from keras.callbacks import ModelCheckpoint, LearningRateScheduler, EarlyStopping, TensorBoard, ReduceLROnPlateau
 
 
-def getCallbacks(config):
+def get_callbacks(config):
     # definisco uno scheduler per il learning rate
     def lr_schedule(epoch, decay=0.9):
         # new_lr = config.base_lr * (decay ** epoch)
@@ -22,8 +22,10 @@ def getCallbacks(config):
                         save_weights_only=True,
                         mode='auto',
                         period=1),
-        LearningRateScheduler(lr_schedule),
-        # ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=2, verbose=1, mode='auto', epsilon=0.0001, cooldown=0, min_lr=0),
+        # LearningRateScheduler(lr_schedule),
+        ReduceLROnPlateau(monitor='val_loss', factor=0.1,
+                          patience=min(2, config.patience / 10),
+                          verbose=1, mode='auto', epsilon=0.0001, cooldown=0, min_lr=0),
         EarlyStopping(monitor='val_loss',
                       min_delta=0.0001,
                       patience=config.patience),

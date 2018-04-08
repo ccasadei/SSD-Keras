@@ -71,7 +71,7 @@ def get_generators(config, model, predictor_sizes):
 
     val_generator = val_dataset.generate(batch_size=config.batch_size,
                                          shuffle=True,
-                                         train=False,
+                                         train=True,
                                          ssd_box_encoder=ssd_box_encoder,
                                          augmentation=False,
                                          max_crop_and_resize=(size, size, 1, 3),

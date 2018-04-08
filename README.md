@@ -11,4 +11,6 @@ Per eseguire il training, lanciare il file `training.py`.
 
 Per eseguire il test, lanciare il file `test.py`.
 
+Il file `show_features.py` serve a visualizzare le immagini elaborate da ogni filtro convoluzionale.
+
 Nella directory `logs` vengono creati i log per **TensorBoard**.

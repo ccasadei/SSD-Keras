@@ -4,7 +4,7 @@ from math import ceil
 from keras.utils import plot_model
 
 from config import Config
-from model.callbacks import getCallbacks
+from model.callbacks import get_callbacks
 from model.generator import get_generators
 from model.loss import getLoss
 from model.optimizer import getOptimizer
@@ -69,7 +69,7 @@ if config.model_image:
 
 train_generator, val_generator, n_train_samples, n_val_samples = get_generators(config, model, predictor_sizes)
 
-callbacks = getCallbacks(config)
+callbacks = get_callbacks(config)
 
 # eseguo il training
 model.fit_generator(generator=train_generator,
