@@ -137,6 +137,7 @@ def histogram_eq(image):
 
     return image1
 
+
 class BatchGenerator:
     '''
     A generator to generate batches of samples and corresponding labels indefinitely.
@@ -617,6 +618,7 @@ class BatchGenerator:
                  train=True,
                  ssd_box_encoder=None,
                  returns={'processed_images', 'encoded_labels'},
+                 augmentation=True,
                  convert_to_3_channels=True,
                  equalize=False,
                  brightness=False,
@@ -865,7 +867,6 @@ class BatchGenerator:
                     batch_y[i] = np.array(batch_y[i])
 
                 # From here on, perform some optional image transformations.
-
                 if (batch_X[i].ndim == 2):
                     if convert_to_3_channels:
                         # Convert the 1-channel image into a 3-channel image.
@@ -874,311 +875,312 @@ class BatchGenerator:
                         # batch_X[i].ndim must always be 3, even for single-channel images.
                         batch_X[i] = np.expand_dims(batch_X[i], axis=-1)
 
-                if equalize:
-                    batch_X[i] = histogram_eq(batch_X[i])
+                if augmentation:
+                    if equalize:
+                        batch_X[i] = histogram_eq(batch_X[i])
 
-                if brightness:
-                    p = np.random.uniform(0,1)
-                    if p >= (1-brightness[2]):
-                        batch_X[i] = _brightness(batch_X[i], min=brightness[0], max=brightness[1])
-
-                if flip: # Performs flips along the vertical axis only (i.e. horizontal flips).
-                    p = np.random.uniform(0,1)
-                    if p >= (1-flip):
-                        batch_X[i] = _flip(batch_X[i])
-                        if not ((batch_y is None) or (len(batch_y[i]) == 0)):
-                            batch_y[i][:,[xmin,xmax]] = img_width - batch_y[i][:,[xmax,xmin]] # xmin and xmax are swapped when mirrored
-
-                if translate:
-                    p = np.random.uniform(0,1)
-                    if p >= (1-translate[2]):
-                        # Translate the image and return the shift values so that we can adjust the labels
-                        batch_X[i], xshift, yshift = _translate(batch_X[i], translate[0], translate[1])
-                        if not ((batch_y is None) or (len(batch_y[i]) == 0)):
-                            # Adjust the box coordinates.
-                            batch_y[i][:,[xmin,xmax]] += xshift
-                            batch_y[i][:,[ymin,ymax]] += yshift
-                            # Limit the box coordinates to lie within the image boundaries
-                            if limit_boxes:
-                                before_limiting = deepcopy(batch_y[i])
-                                x_coords = batch_y[i][:,[xmin,xmax]]
-                                x_coords[x_coords >= img_width] = img_width - 1
-                                x_coords[x_coords < 0] = 0
-                                batch_y[i][:,[xmin,xmax]] = x_coords
-                                y_coords = batch_y[i][:,[ymin,ymax]]
-                                y_coords[y_coords >= img_height] = img_height - 1
-                                y_coords[y_coords < 0] = 0
-                                batch_y[i][:,[ymin,ymax]] = y_coords
-                                # Some objects might have gotten pushed so far outside the image boundaries in the transformation
-                                # process that they don't serve as useful training examples anymore, because too little of them is
-                                # visible. We'll remove all boxes that we had to limit so much that their area is less than
-                                # `include_thresh` of the box area before limiting.
-                                before_area = (before_limiting[:,xmax] - before_limiting[:,xmin]) * (before_limiting[:,ymax] - before_limiting[:,ymin])
-                                after_area = (batch_y[i][:,xmax] - batch_y[i][:,xmin]) * (batch_y[i][:,ymax] - batch_y[i][:,ymin])
-                                if include_thresh == 0: batch_y[i] = batch_y[i][after_area > include_thresh * before_area] # If `include_thresh == 0`, we want to make sure that boxes with area 0 get thrown out, hence the ">" sign instead of the ">=" sign
-                                else: batch_y[i] = batch_y[i][after_area >= include_thresh * before_area] # Especially for the case `include_thresh == 1` we want the ">=" sign, otherwise no boxes would be left at all
-
-                if scale:
-                    p = np.random.uniform(0,1)
-                    if p >= (1-scale[2]):
-                        # Rescale the image and return the transformation matrix M so we can use it to adjust the box coordinates
-                        batch_X[i], M, scale_factor = _scale(batch_X[i], scale[0], scale[1])
-                        if not ((batch_y is None) or (len(batch_y[i]) == 0)):
-                            # Adjust the box coordinates.
-                            # Transform two opposite corner points of the rectangular boxes using the transformation matrix `M`
-                            toplefts = np.array([batch_y[i][:,xmin], batch_y[i][:,ymin], np.ones(batch_y[i].shape[0])])
-                            bottomrights = np.array([batch_y[i][:,xmax], batch_y[i][:,ymax], np.ones(batch_y[i].shape[0])])
-                            new_toplefts = (np.dot(M, toplefts)).T
-                            new_bottomrights = (np.dot(M, bottomrights)).T
-                            batch_y[i][:,[xmin,ymin]] = new_toplefts.astype(np.int)
-                            batch_y[i][:,[xmax,ymax]] = new_bottomrights.astype(np.int)
-                            # Limit the box coordinates to lie within the image boundaries
-                            if limit_boxes and (scale_factor > 1): # We don't need to do any limiting in case we shrunk the image
-                                before_limiting = deepcopy(batch_y[i])
-                                x_coords = batch_y[i][:,[xmin,xmax]]
-                                x_coords[x_coords >= img_width] = img_width - 1
-                                x_coords[x_coords < 0] = 0
-                                batch_y[i][:,[xmin,xmax]] = x_coords
-                                y_coords = batch_y[i][:,[ymin,ymax]]
-                                y_coords[y_coords >= img_height] = img_height - 1
-                                y_coords[y_coords < 0] = 0
-                                batch_y[i][:,[ymin,ymax]] = y_coords
-                                # Some objects might have gotten pushed so far outside the image boundaries in the transformation
-                                # process that they don't serve as useful training examples anymore, because too little of them is
-                                # visible. We'll remove all boxes that we had to limit so much that their area is less than
-                                # `include_thresh` of the box area before limiting.
-                                before_area = (before_limiting[:,xmax] - before_limiting[:,xmin]) * (before_limiting[:,ymax] - before_limiting[:,ymin])
-                                after_area = (batch_y[i][:,xmax] - batch_y[i][:,xmin]) * (batch_y[i][:,ymax] - batch_y[i][:,ymin])
-                                if include_thresh == 0: batch_y[i] = batch_y[i][after_area > include_thresh * before_area] # If `include_thresh == 0`, we want to make sure that boxes with area 0 get thrown out, hence the ">" sign instead of the ">=" sign
-                                else: batch_y[i] = batch_y[i][after_area >= include_thresh * before_area] # Especially for the case `include_thresh == 1` we want the ">=" sign, otherwise no boxes would be left at all
-
-                if max_crop_and_resize:
-                    # The ratio of the two aspect ratios (source image and target size) determines the maximal possible crop.
-                    image_aspect_ratio = img_width / img_height
-                    resize_aspect_ratio = max_crop_and_resize[1] / max_crop_and_resize[0]
-
-                    if image_aspect_ratio < resize_aspect_ratio:
-                        crop_width = img_width
-                        crop_height = int(round(crop_width / resize_aspect_ratio))
-                    else:
-                        crop_height = img_height
-                        crop_width = int(round(crop_height * resize_aspect_ratio))
-                    # The actual cropping and resizing will be done by the random crop and resizing operations below.
-                    # Here, we only set the parameters for them.
-                    random_crop = (crop_height, crop_width, max_crop_and_resize[2], max_crop_and_resize[3])
-                    resize = (max_crop_and_resize[0], max_crop_and_resize[1])
-
-                if random_pad_and_resize:
-
-                    resize_aspect_ratio = random_pad_and_resize[1] / random_pad_and_resize[0]
-
-                    if img_width < img_height:
-                        crop_height = img_height
-                        crop_width = int(round(crop_height * resize_aspect_ratio))
-                    else:
-                        crop_width = img_width
-                        crop_height = int(round(crop_width / resize_aspect_ratio))
-                    # The actual cropping and resizing will be done by the random crop and resizing operations below.
-                    # Here, we only set the parameters for them.
-                    if max_crop_and_resize:
+                    if brightness:
                         p = np.random.uniform(0,1)
-                        if p >= (1-random_pad_and_resize[4]):
+                        if p >= (1-brightness[2]):
+                            batch_X[i] = _brightness(batch_X[i], min=brightness[0], max=brightness[1])
+
+                    if flip: # Performs flips along the vertical axis only (i.e. horizontal flips).
+                        p = np.random.uniform(0,1)
+                        if p >= (1-flip):
+                            batch_X[i] = _flip(batch_X[i])
+                            if not ((batch_y is None) or (len(batch_y[i]) == 0)):
+                                batch_y[i][:,[xmin,xmax]] = img_width - batch_y[i][:,[xmax,xmin]] # xmin and xmax are swapped when mirrored
+
+                    if translate:
+                        p = np.random.uniform(0,1)
+                        if p >= (1-translate[2]):
+                            # Translate the image and return the shift values so that we can adjust the labels
+                            batch_X[i], xshift, yshift = _translate(batch_X[i], translate[0], translate[1])
+                            if not ((batch_y is None) or (len(batch_y[i]) == 0)):
+                                # Adjust the box coordinates.
+                                batch_y[i][:,[xmin,xmax]] += xshift
+                                batch_y[i][:,[ymin,ymax]] += yshift
+                                # Limit the box coordinates to lie within the image boundaries
+                                if limit_boxes:
+                                    before_limiting = deepcopy(batch_y[i])
+                                    x_coords = batch_y[i][:,[xmin,xmax]]
+                                    x_coords[x_coords >= img_width] = img_width - 1
+                                    x_coords[x_coords < 0] = 0
+                                    batch_y[i][:,[xmin,xmax]] = x_coords
+                                    y_coords = batch_y[i][:,[ymin,ymax]]
+                                    y_coords[y_coords >= img_height] = img_height - 1
+                                    y_coords[y_coords < 0] = 0
+                                    batch_y[i][:,[ymin,ymax]] = y_coords
+                                    # Some objects might have gotten pushed so far outside the image boundaries in the transformation
+                                    # process that they don't serve as useful training examples anymore, because too little of them is
+                                    # visible. We'll remove all boxes that we had to limit so much that their area is less than
+                                    # `include_thresh` of the box area before limiting.
+                                    before_area = (before_limiting[:,xmax] - before_limiting[:,xmin]) * (before_limiting[:,ymax] - before_limiting[:,ymin])
+                                    after_area = (batch_y[i][:,xmax] - batch_y[i][:,xmin]) * (batch_y[i][:,ymax] - batch_y[i][:,ymin])
+                                    if include_thresh == 0: batch_y[i] = batch_y[i][after_area > include_thresh * before_area] # If `include_thresh == 0`, we want to make sure that boxes with area 0 get thrown out, hence the ">" sign instead of the ">=" sign
+                                    else: batch_y[i] = batch_y[i][after_area >= include_thresh * before_area] # Especially for the case `include_thresh == 1` we want the ">=" sign, otherwise no boxes would be left at all
+
+                    if scale:
+                        p = np.random.uniform(0,1)
+                        if p >= (1-scale[2]):
+                            # Rescale the image and return the transformation matrix M so we can use it to adjust the box coordinates
+                            batch_X[i], M, scale_factor = _scale(batch_X[i], scale[0], scale[1])
+                            if not ((batch_y is None) or (len(batch_y[i]) == 0)):
+                                # Adjust the box coordinates.
+                                # Transform two opposite corner points of the rectangular boxes using the transformation matrix `M`
+                                toplefts = np.array([batch_y[i][:,xmin], batch_y[i][:,ymin], np.ones(batch_y[i].shape[0])])
+                                bottomrights = np.array([batch_y[i][:,xmax], batch_y[i][:,ymax], np.ones(batch_y[i].shape[0])])
+                                new_toplefts = (np.dot(M, toplefts)).T
+                                new_bottomrights = (np.dot(M, bottomrights)).T
+                                batch_y[i][:,[xmin,ymin]] = new_toplefts.astype(np.int)
+                                batch_y[i][:,[xmax,ymax]] = new_bottomrights.astype(np.int)
+                                # Limit the box coordinates to lie within the image boundaries
+                                if limit_boxes and (scale_factor > 1): # We don't need to do any limiting in case we shrunk the image
+                                    before_limiting = deepcopy(batch_y[i])
+                                    x_coords = batch_y[i][:,[xmin,xmax]]
+                                    x_coords[x_coords >= img_width] = img_width - 1
+                                    x_coords[x_coords < 0] = 0
+                                    batch_y[i][:,[xmin,xmax]] = x_coords
+                                    y_coords = batch_y[i][:,[ymin,ymax]]
+                                    y_coords[y_coords >= img_height] = img_height - 1
+                                    y_coords[y_coords < 0] = 0
+                                    batch_y[i][:,[ymin,ymax]] = y_coords
+                                    # Some objects might have gotten pushed so far outside the image boundaries in the transformation
+                                    # process that they don't serve as useful training examples anymore, because too little of them is
+                                    # visible. We'll remove all boxes that we had to limit so much that their area is less than
+                                    # `include_thresh` of the box area before limiting.
+                                    before_area = (before_limiting[:,xmax] - before_limiting[:,xmin]) * (before_limiting[:,ymax] - before_limiting[:,ymin])
+                                    after_area = (batch_y[i][:,xmax] - batch_y[i][:,xmin]) * (batch_y[i][:,ymax] - batch_y[i][:,ymin])
+                                    if include_thresh == 0: batch_y[i] = batch_y[i][after_area > include_thresh * before_area] # If `include_thresh == 0`, we want to make sure that boxes with area 0 get thrown out, hence the ">" sign instead of the ">=" sign
+                                    else: batch_y[i] = batch_y[i][after_area >= include_thresh * before_area] # Especially for the case `include_thresh == 1` we want the ">=" sign, otherwise no boxes would be left at all
+
+                    if max_crop_and_resize:
+                        # The ratio of the two aspect ratios (source image and target size) determines the maximal possible crop.
+                        image_aspect_ratio = img_width / img_height
+                        resize_aspect_ratio = max_crop_and_resize[1] / max_crop_and_resize[0]
+
+                        if image_aspect_ratio < resize_aspect_ratio:
+                            crop_width = img_width
+                            crop_height = int(round(crop_width / resize_aspect_ratio))
+                        else:
+                            crop_height = img_height
+                            crop_width = int(round(crop_height * resize_aspect_ratio))
+                        # The actual cropping and resizing will be done by the random crop and resizing operations below.
+                        # Here, we only set the parameters for them.
+                        random_crop = (crop_height, crop_width, max_crop_and_resize[2], max_crop_and_resize[3])
+                        resize = (max_crop_and_resize[0], max_crop_and_resize[1])
+
+                    if random_pad_and_resize:
+
+                        resize_aspect_ratio = random_pad_and_resize[1] / random_pad_and_resize[0]
+
+                        if img_width < img_height:
+                            crop_height = img_height
+                            crop_width = int(round(crop_height * resize_aspect_ratio))
+                        else:
+                            crop_width = img_width
+                            crop_height = int(round(crop_width / resize_aspect_ratio))
+                        # The actual cropping and resizing will be done by the random crop and resizing operations below.
+                        # Here, we only set the parameters for them.
+                        if max_crop_and_resize:
+                            p = np.random.uniform(0,1)
+                            if p >= (1-random_pad_and_resize[4]):
+                                random_crop = (crop_height, crop_width, random_pad_and_resize[2], random_pad_and_resize[3])
+                                resize = (random_pad_and_resize[0], random_pad_and_resize[1])
+                        else:
                             random_crop = (crop_height, crop_width, random_pad_and_resize[2], random_pad_and_resize[3])
                             resize = (random_pad_and_resize[0], random_pad_and_resize[1])
-                    else:
-                        random_crop = (crop_height, crop_width, random_pad_and_resize[2], random_pad_and_resize[3])
-                        resize = (random_pad_and_resize[0], random_pad_and_resize[1])
 
-                if random_crop:
-                    # Compute how much room we have in both dimensions to make a random crop.
-                    # A negative number here means that we want to crop out a patch that is larger than the original image in the respective dimension,
-                    # in which case we will create a black background canvas onto which we will randomly place the image.
-                    y_range = img_height - random_crop[0]
-                    x_range = img_width - random_crop[1]
-                    # Keep track of the number of trials and of whether or not the most recent crop contains at least one object
-                    min_1_object_fulfilled = False
-                    trial_counter = 0
-                    while (not min_1_object_fulfilled) and (trial_counter < random_crop[3]):
-                        # Select a random crop position from the possible crop positions
-                        if y_range >= 0: crop_ymin = np.random.randint(0, y_range + 1) # There are y_range + 1 possible positions for the crop in the vertical dimension
-                        else: crop_ymin = np.random.randint(0, -y_range + 1) # The possible positions for the image on the background canvas in the vertical dimension
-                        if x_range >= 0: crop_xmin = np.random.randint(0, x_range + 1) # There are x_range + 1 possible positions for the crop in the horizontal dimension
-                        else: crop_xmin = np.random.randint(0, -x_range + 1) # The possible positions for the image on the background canvas in the horizontal dimension
-                        # Perform the crop
-                        if y_range >= 0 and x_range >= 0: # If the patch to be cropped out is smaller than the original image in both dimenstions, we just perform a regular crop
-                            # Crop the image
-                            patch_X = np.copy(batch_X[i][crop_ymin:crop_ymin+random_crop[0], crop_xmin:crop_xmin+random_crop[1]])
-                            # Add the parameters to reverse this transformation.
-                            patch_y_inverse_y = crop_ymin
-                            patch_y_inverse_x = crop_xmin
+                    if random_crop:
+                        # Compute how much room we have in both dimensions to make a random crop.
+                        # A negative number here means that we want to crop out a patch that is larger than the original image in the respective dimension,
+                        # in which case we will create a black background canvas onto which we will randomly place the image.
+                        y_range = img_height - random_crop[0]
+                        x_range = img_width - random_crop[1]
+                        # Keep track of the number of trials and of whether or not the most recent crop contains at least one object
+                        min_1_object_fulfilled = False
+                        trial_counter = 0
+                        while (not min_1_object_fulfilled) and (trial_counter < random_crop[3]):
+                            # Select a random crop position from the possible crop positions
+                            if y_range >= 0: crop_ymin = np.random.randint(0, y_range + 1) # There are y_range + 1 possible positions for the crop in the vertical dimension
+                            else: crop_ymin = np.random.randint(0, -y_range + 1) # The possible positions for the image on the background canvas in the vertical dimension
+                            if x_range >= 0: crop_xmin = np.random.randint(0, x_range + 1) # There are x_range + 1 possible positions for the crop in the horizontal dimension
+                            else: crop_xmin = np.random.randint(0, -x_range + 1) # The possible positions for the image on the background canvas in the horizontal dimension
+                            # Perform the crop
+                            if y_range >= 0 and x_range >= 0: # If the patch to be cropped out is smaller than the original image in both dimenstions, we just perform a regular crop
+                                # Crop the image
+                                patch_X = np.copy(batch_X[i][crop_ymin:crop_ymin+random_crop[0], crop_xmin:crop_xmin+random_crop[1]])
+                                # Add the parameters to reverse this transformation.
+                                patch_y_inverse_y = crop_ymin
+                                patch_y_inverse_x = crop_xmin
+                                if not ((batch_y is None) or (len(batch_y[i]) == 0)):
+                                    # Translate the box coordinates into the new coordinate system: Cropping shifts the origin by `(crop_ymin, crop_xmin)`
+                                    patch_y = np.copy(batch_y[i])
+                                    patch_y[:,[ymin,ymax]] -= crop_ymin
+                                    patch_y[:,[xmin,xmax]] -= crop_xmin
+                                    # Limit the box coordinates to lie within the new image boundaries
+                                    if limit_boxes:
+                                        # Both the x- and y-coordinates might need to be limited
+                                        before_limiting = np.copy(patch_y)
+                                        y_coords = patch_y[:,[ymin,ymax]]
+                                        y_coords[y_coords < 0] = 0
+                                        y_coords[y_coords >= random_crop[0]] = random_crop[0] - 1
+                                        patch_y[:,[ymin,ymax]] = y_coords
+                                        x_coords = patch_y[:,[xmin,xmax]]
+                                        x_coords[x_coords < 0] = 0
+                                        x_coords[x_coords >= random_crop[1]] = random_crop[1] - 1
+                                        patch_y[:,[xmin,xmax]] = x_coords
+                            elif y_range >= 0 and x_range < 0: # If the crop is larger than the original image in the horizontal dimension only,...
+                                # Crop the image
+                                patch_X = np.copy(batch_X[i][crop_ymin:crop_ymin+random_crop[0]]) # ...crop the vertical dimension just as before,...
+                                canvas = np.zeros((random_crop[0], random_crop[1], patch_X.shape[2]), dtype=np.uint8) # ...generate a blank background image to place the patch onto,...
+                                canvas[:, crop_xmin:crop_xmin+img_width] = patch_X # ...and place the patch onto the canvas at the random `crop_xmin` position computed above.
+                                patch_X = canvas
+                                # Add the parameters to reverse this transformation.
+                                patch_y_inverse_y = crop_ymin
+                                patch_y_inverse_x = -crop_xmin
+                                if not ((batch_y is None) or (len(batch_y[i]) == 0)):
+                                    # Translate the box coordinates into the new coordinate system: In this case, the origin is shifted by `(crop_ymin, -crop_xmin)`
+                                    patch_y = np.copy(batch_y[i])
+                                    patch_y[:,[ymin,ymax]] -= crop_ymin
+                                    patch_y[:,[xmin,xmax]] += crop_xmin
+                                    # Limit the box coordinates to lie within the new image boundaries
+                                    if limit_boxes:
+                                        # Only the y-coordinates might need to be limited
+                                        before_limiting = np.copy(patch_y)
+                                        y_coords = patch_y[:,[ymin,ymax]]
+                                        y_coords[y_coords < 0] = 0
+                                        y_coords[y_coords >= random_crop[0]] = random_crop[0] - 1
+                                        patch_y[:,[ymin,ymax]] = y_coords
+                            elif y_range < 0 and x_range >= 0: # If the crop is larger than the original image in the vertical dimension only,...
+                                # Crop the image
+                                patch_X = np.copy(batch_X[i][:,crop_xmin:crop_xmin+random_crop[1]]) # ...crop the horizontal dimension just as in the first case,...
+                                canvas = np.zeros((random_crop[0], random_crop[1], patch_X.shape[2]), dtype=np.uint8) # ...generate a blank background image to place the patch onto,...
+                                canvas[crop_ymin:crop_ymin+img_height, :] = patch_X # ...and place the patch onto the canvas at the random `crop_ymin` position computed above.
+                                patch_X = canvas
+                                # Add the parameters to reverse this transformation.
+                                patch_y_inverse_y = -crop_ymin
+                                patch_y_inverse_x = crop_xmin
+                                if not ((batch_y is None) or (len(batch_y[i]) == 0)):
+                                    # Translate the box coordinates into the new coordinate system: In this case, the origin is shifted by `(-crop_ymin, crop_xmin)`
+                                    patch_y = np.copy(batch_y[i])
+                                    patch_y[:,[ymin,ymax]] += crop_ymin
+                                    patch_y[:,[xmin,xmax]] -= crop_xmin
+                                    # Limit the box coordinates to lie within the new image boundaries
+                                    if limit_boxes:
+                                        # Only the x-coordinates might need to be limited
+                                        before_limiting = np.copy(patch_y)
+                                        x_coords = patch_y[:,[xmin,xmax]]
+                                        x_coords[x_coords < 0] = 0
+                                        x_coords[x_coords >= random_crop[1]] = random_crop[1] - 1
+                                        patch_y[:,[xmin,xmax]] = x_coords
+                            else:  # If the crop is larger than the original image in both dimensions,...
+                                patch_X = np.copy(batch_X[i])
+                                canvas = np.zeros((random_crop[0], random_crop[1], patch_X.shape[2]), dtype=np.uint8) # ...generate a blank background image to place the patch onto,...
+                                canvas[crop_ymin:crop_ymin+img_height, crop_xmin:crop_xmin+img_width] = patch_X # ...and place the patch onto the canvas at the random `(crop_ymin, crop_xmin)` position computed above.
+                                patch_X = canvas
+                                # Add the parameters to reverse this transformation.
+                                patch_y_inverse_y = -crop_ymin
+                                patch_y_inverse_x = -crop_xmin
+                                if not ((batch_y is None) or (len(batch_y[i]) == 0)):
+                                    # Translate the box coordinates into the new coordinate system: In this case, the origin is shifted by `(-crop_ymin, -crop_xmin)`
+                                    patch_y = np.copy(batch_y[i])
+                                    patch_y[:,[ymin,ymax]] += crop_ymin
+                                    patch_y[:,[xmin,xmax]] += crop_xmin
+                                    # Note that no limiting is necessary in this case
                             if not ((batch_y is None) or (len(batch_y[i]) == 0)):
-                                # Translate the box coordinates into the new coordinate system: Cropping shifts the origin by `(crop_ymin, crop_xmin)`
-                                patch_y = np.copy(batch_y[i])
-                                patch_y[:,[ymin,ymax]] -= crop_ymin
-                                patch_y[:,[xmin,xmax]] -= crop_xmin
-                                # Limit the box coordinates to lie within the new image boundaries
-                                if limit_boxes:
-                                    # Both the x- and y-coordinates might need to be limited
-                                    before_limiting = np.copy(patch_y)
-                                    y_coords = patch_y[:,[ymin,ymax]]
-                                    y_coords[y_coords < 0] = 0
-                                    y_coords[y_coords >= random_crop[0]] = random_crop[0] - 1
-                                    patch_y[:,[ymin,ymax]] = y_coords
-                                    x_coords = patch_y[:,[xmin,xmax]]
-                                    x_coords[x_coords < 0] = 0
-                                    x_coords[x_coords >= random_crop[1]] = random_crop[1] - 1
-                                    patch_y[:,[xmin,xmax]] = x_coords
-                        elif y_range >= 0 and x_range < 0: # If the crop is larger than the original image in the horizontal dimension only,...
-                            # Crop the image
-                            patch_X = np.copy(batch_X[i][crop_ymin:crop_ymin+random_crop[0]]) # ...crop the vertical dimension just as before,...
-                            canvas = np.zeros((random_crop[0], random_crop[1], patch_X.shape[2]), dtype=np.uint8) # ...generate a blank background image to place the patch onto,...
-                            canvas[:, crop_xmin:crop_xmin+img_width] = patch_X # ...and place the patch onto the canvas at the random `crop_xmin` position computed above.
-                            patch_X = canvas
-                            # Add the parameters to reverse this transformation.
-                            patch_y_inverse_y = crop_ymin
-                            patch_y_inverse_x = -crop_xmin
-                            if not ((batch_y is None) or (len(batch_y[i]) == 0)):
-                                # Translate the box coordinates into the new coordinate system: In this case, the origin is shifted by `(crop_ymin, -crop_xmin)`
-                                patch_y = np.copy(batch_y[i])
-                                patch_y[:,[ymin,ymax]] -= crop_ymin
-                                patch_y[:,[xmin,xmax]] += crop_xmin
-                                # Limit the box coordinates to lie within the new image boundaries
-                                if limit_boxes:
-                                    # Only the y-coordinates might need to be limited
-                                    before_limiting = np.copy(patch_y)
-                                    y_coords = patch_y[:,[ymin,ymax]]
-                                    y_coords[y_coords < 0] = 0
-                                    y_coords[y_coords >= random_crop[0]] = random_crop[0] - 1
-                                    patch_y[:,[ymin,ymax]] = y_coords
-                        elif y_range < 0 and x_range >= 0: # If the crop is larger than the original image in the vertical dimension only,...
-                            # Crop the image
-                            patch_X = np.copy(batch_X[i][:,crop_xmin:crop_xmin+random_crop[1]]) # ...crop the horizontal dimension just as in the first case,...
-                            canvas = np.zeros((random_crop[0], random_crop[1], patch_X.shape[2]), dtype=np.uint8) # ...generate a blank background image to place the patch onto,...
-                            canvas[crop_ymin:crop_ymin+img_height, :] = patch_X # ...and place the patch onto the canvas at the random `crop_ymin` position computed above.
-                            patch_X = canvas
-                            # Add the parameters to reverse this transformation.
-                            patch_y_inverse_y = -crop_ymin
-                            patch_y_inverse_x = crop_xmin
-                            if not ((batch_y is None) or (len(batch_y[i]) == 0)):
-                                # Translate the box coordinates into the new coordinate system: In this case, the origin is shifted by `(-crop_ymin, crop_xmin)`
-                                patch_y = np.copy(batch_y[i])
-                                patch_y[:,[ymin,ymax]] += crop_ymin
-                                patch_y[:,[xmin,xmax]] -= crop_xmin
-                                # Limit the box coordinates to lie within the new image boundaries
-                                if limit_boxes:
-                                    # Only the x-coordinates might need to be limited
-                                    before_limiting = np.copy(patch_y)
-                                    x_coords = patch_y[:,[xmin,xmax]]
-                                    x_coords[x_coords < 0] = 0
-                                    x_coords[x_coords >= random_crop[1]] = random_crop[1] - 1
-                                    patch_y[:,[xmin,xmax]] = x_coords
-                        else:  # If the crop is larger than the original image in both dimensions,...
-                            patch_X = np.copy(batch_X[i])
-                            canvas = np.zeros((random_crop[0], random_crop[1], patch_X.shape[2]), dtype=np.uint8) # ...generate a blank background image to place the patch onto,...
-                            canvas[crop_ymin:crop_ymin+img_height, crop_xmin:crop_xmin+img_width] = patch_X # ...and place the patch onto the canvas at the random `(crop_ymin, crop_xmin)` position computed above.
-                            patch_X = canvas
-                            # Add the parameters to reverse this transformation.
-                            patch_y_inverse_y = -crop_ymin
-                            patch_y_inverse_x = -crop_xmin
-                            if not ((batch_y is None) or (len(batch_y[i]) == 0)):
-                                # Translate the box coordinates into the new coordinate system: In this case, the origin is shifted by `(-crop_ymin, -crop_xmin)`
-                                patch_y = np.copy(batch_y[i])
-                                patch_y[:,[ymin,ymax]] += crop_ymin
-                                patch_y[:,[xmin,xmax]] += crop_xmin
-                                # Note that no limiting is necessary in this case
-                        if not ((batch_y is None) or (len(batch_y[i]) == 0)):
-                            # Some objects might have gotten pushed so far outside the image boundaries in the transformation
-                            # process that they don't serve as useful training examples anymore, because too little of them is
-                            # visible. We'll remove all boxes that we had to limit so much that their area is less than
-                            # `include_thresh` of the box area before limiting.
-                            if limit_boxes and (y_range >= 0 or x_range >= 0):
-                                before_area = (before_limiting[:,xmax] - before_limiting[:,xmin]) * (before_limiting[:,ymax] - before_limiting[:,ymin])
-                                after_area = (patch_y[:,xmax] - patch_y[:,xmin]) * (patch_y[:,ymax] - patch_y[:,ymin])
-                                if include_thresh == 0: patch_y = patch_y[after_area > include_thresh * before_area] # If `include_thresh == 0`, we want to make sure that boxes with area 0 get thrown out, hence the ">" sign instead of the ">=" sign
-                                else: patch_y = patch_y[after_area >= include_thresh * before_area] # Especially for the case `include_thresh == 1` we want the ">=" sign, otherwise no boxes would be left at all
-                            trial_counter += 1 # We've just used one of our trials
-                            # Check if we have found a valid crop
-                            if random_crop[2] == 0: # If `min_1_object == 0`, break out of the while loop after the first loop because we are fine with whatever crop we got
+                                # Some objects might have gotten pushed so far outside the image boundaries in the transformation
+                                # process that they don't serve as useful training examples anymore, because too little of them is
+                                # visible. We'll remove all boxes that we had to limit so much that their area is less than
+                                # `include_thresh` of the box area before limiting.
+                                if limit_boxes and (y_range >= 0 or x_range >= 0):
+                                    before_area = (before_limiting[:,xmax] - before_limiting[:,xmin]) * (before_limiting[:,ymax] - before_limiting[:,ymin])
+                                    after_area = (patch_y[:,xmax] - patch_y[:,xmin]) * (patch_y[:,ymax] - patch_y[:,ymin])
+                                    if include_thresh == 0: patch_y = patch_y[after_area > include_thresh * before_area] # If `include_thresh == 0`, we want to make sure that boxes with area 0 get thrown out, hence the ">" sign instead of the ">=" sign
+                                    else: patch_y = patch_y[after_area >= include_thresh * before_area] # Especially for the case `include_thresh == 1` we want the ">=" sign, otherwise no boxes would be left at all
+                                trial_counter += 1 # We've just used one of our trials
+                                # Check if we have found a valid crop
+                                if random_crop[2] == 0: # If `min_1_object == 0`, break out of the while loop after the first loop because we are fine with whatever crop we got
+                                    batch_X[i] = patch_X # The cropped patch becomes our new batch item
+                                    batch_y[i] = patch_y # The adjusted boxes become our new labels for this batch item
+                                    batch_inverse_coord_transform[i,[ymin-ios,ymax-ios],0] += patch_y_inverse_y
+                                    batch_inverse_coord_transform[i,[xmin-ios,xmax-ios],0] += patch_y_inverse_x
+                                    break
+                                elif len(patch_y) > 0: # If we have at least one object left, this crop is valid and we can stop
+                                    min_1_object_fulfilled = True
+                                    batch_X[i] = patch_X # The cropped patch becomes our new batch item
+                                    batch_y[i] = patch_y # The adjusted boxes become our new labels for this batch item
+                                    batch_inverse_coord_transform[i,[ymin-ios,ymax-ios],0] += patch_y_inverse_y
+                                    batch_inverse_coord_transform[i,[xmin-ios,xmax-ios],0] += patch_y_inverse_x
+                                elif (trial_counter >= random_crop[3]) and (not i in batch_items_to_remove): # If we've reached the trial limit and still not found a valid crop, remove this image from the batch
+                                    batch_items_to_remove.append(i)
+                            else: # If `batch_y` is `None`, i.e. if we don't have ground truth data, any crop is a valid crop.
                                 batch_X[i] = patch_X # The cropped patch becomes our new batch item
-                                batch_y[i] = patch_y # The adjusted boxes become our new labels for this batch item
                                 batch_inverse_coord_transform[i,[ymin-ios,ymax-ios],0] += patch_y_inverse_y
                                 batch_inverse_coord_transform[i,[xmin-ios,xmax-ios],0] += patch_y_inverse_x
                                 break
-                            elif len(patch_y) > 0: # If we have at least one object left, this crop is valid and we can stop
-                                min_1_object_fulfilled = True
-                                batch_X[i] = patch_X # The cropped patch becomes our new batch item
-                                batch_y[i] = patch_y # The adjusted boxes become our new labels for this batch item
-                                batch_inverse_coord_transform[i,[ymin-ios,ymax-ios],0] += patch_y_inverse_y
-                                batch_inverse_coord_transform[i,[xmin-ios,xmax-ios],0] += patch_y_inverse_x
-                            elif (trial_counter >= random_crop[3]) and (not i in batch_items_to_remove): # If we've reached the trial limit and still not found a valid crop, remove this image from the batch
-                                batch_items_to_remove.append(i)
-                        else: # If `batch_y` is `None`, i.e. if we don't have ground truth data, any crop is a valid crop.
-                            batch_X[i] = patch_X # The cropped patch becomes our new batch item
-                            batch_inverse_coord_transform[i,[ymin-ios,ymax-ios],0] += patch_y_inverse_y
-                            batch_inverse_coord_transform[i,[xmin-ios,xmax-ios],0] += patch_y_inverse_x
-                            break
-                    # Update the image size so that subsequent transformations can work correctly.
-                    img_height = random_crop[0]
-                    img_width = random_crop[1]
+                        # Update the image size so that subsequent transformations can work correctly.
+                        img_height = random_crop[0]
+                        img_width = random_crop[1]
 
-                if crop:
-                    # Crop the image
-                    batch_X[i] = np.copy(batch_X[i][crop[0]:img_height-crop[1], crop[2]:img_width-crop[3]])
-                    # Update the image size so that subsequent transformations can work correctly
-                    img_height -= crop[0] + crop[1]
-                    img_width -= crop[2] + crop[3]
-                    if not ((batch_y is None) or (len(batch_y[i]) == 0)):
-                        # Translate the box coordinates into the new coordinate system if necessary: The origin is shifted by `(crop[0], crop[2])` (i.e. by the top and left crop values)
-                        # If nothing was cropped off from the top or left of the image, the coordinate system stays the same as before
-                        if crop[0] > 0:
-                            batch_y[i][:,[ymin,ymax]] -= crop[0]
-                        if crop[2] > 0:
-                            batch_y[i][:,[xmin,xmax]] -= crop[2]
-                        # Limit the box coordinates to lie within the new image boundaries
-                        if limit_boxes:
-                            before_limiting = np.copy(batch_y[i])
-                            # We only need to check those box coordinates that could possibly have been affected by the cropping
-                            # For example, if we only crop off the top and/or bottom of the image, there is no need to check the x-coordinates
+                    if crop:
+                        # Crop the image
+                        batch_X[i] = np.copy(batch_X[i][crop[0]:img_height-crop[1], crop[2]:img_width-crop[3]])
+                        # Update the image size so that subsequent transformations can work correctly
+                        img_height -= crop[0] + crop[1]
+                        img_width -= crop[2] + crop[3]
+                        if not ((batch_y is None) or (len(batch_y[i]) == 0)):
+                            # Translate the box coordinates into the new coordinate system if necessary: The origin is shifted by `(crop[0], crop[2])` (i.e. by the top and left crop values)
+                            # If nothing was cropped off from the top or left of the image, the coordinate system stays the same as before
                             if crop[0] > 0:
-                                y_coords = batch_y[i][:,[ymin,ymax]]
-                                y_coords[y_coords < 0] = 0
-                                batch_y[i][:,[ymin,ymax]] = y_coords
-                            if crop[1] > 0:
-                                y_coords = batch_y[i][:,[ymin,ymax]]
-                                y_coords[y_coords >= img_height] = img_height - 1
-                                batch_y[i][:,[ymin,ymax]] = y_coords
+                                batch_y[i][:,[ymin,ymax]] -= crop[0]
                             if crop[2] > 0:
-                                x_coords = batch_y[i][:,[xmin,xmax]]
-                                x_coords[x_coords < 0] = 0
-                                batch_y[i][:,[xmin,xmax]] = x_coords
-                            if crop[3] > 0:
-                                x_coords = batch_y[i][:,[xmin,xmax]]
-                                x_coords[x_coords >= img_width] = img_width - 1
-                                batch_y[i][:,[xmin,xmax]] = x_coords
-                            # Some objects might have gotten pushed so far outside the image boundaries in the transformation
-                            # process that they don't serve as useful training examples anymore, because too little of them is
-                            # visible. We'll remove all boxes that we had to limit so much that their area is less than
-                            # `include_thresh` of the box area before limiting.
-                            before_area = (before_limiting[:,xmax] - before_limiting[:,xmin]) * (before_limiting[:,ymax] - before_limiting[:,ymin])
-                            after_area = (batch_y[i][:,xmax] - batch_y[i][:,xmin]) * (batch_y[i][:,ymax] - batch_y[i][:,ymin])
-                            if include_thresh == 0: batch_y[i] = batch_y[i][after_area > include_thresh * before_area] # If `include_thresh == 0`, we want to make sure that boxes with area 0 get thrown out, hence the ">" sign instead of the ">=" sign
-                            else: batch_y[i] = batch_y[i][after_area >= include_thresh * before_area] # Especially for the case `include_thresh == 1` we want the ">=" sign, otherwise no boxes would be left at all
+                                batch_y[i][:,[xmin,xmax]] -= crop[2]
+                            # Limit the box coordinates to lie within the new image boundaries
+                            if limit_boxes:
+                                before_limiting = np.copy(batch_y[i])
+                                # We only need to check those box coordinates that could possibly have been affected by the cropping
+                                # For example, if we only crop off the top and/or bottom of the image, there is no need to check the x-coordinates
+                                if crop[0] > 0:
+                                    y_coords = batch_y[i][:,[ymin,ymax]]
+                                    y_coords[y_coords < 0] = 0
+                                    batch_y[i][:,[ymin,ymax]] = y_coords
+                                if crop[1] > 0:
+                                    y_coords = batch_y[i][:,[ymin,ymax]]
+                                    y_coords[y_coords >= img_height] = img_height - 1
+                                    batch_y[i][:,[ymin,ymax]] = y_coords
+                                if crop[2] > 0:
+                                    x_coords = batch_y[i][:,[xmin,xmax]]
+                                    x_coords[x_coords < 0] = 0
+                                    batch_y[i][:,[xmin,xmax]] = x_coords
+                                if crop[3] > 0:
+                                    x_coords = batch_y[i][:,[xmin,xmax]]
+                                    x_coords[x_coords >= img_width] = img_width - 1
+                                    batch_y[i][:,[xmin,xmax]] = x_coords
+                                # Some objects might have gotten pushed so far outside the image boundaries in the transformation
+                                # process that they don't serve as useful training examples anymore, because too little of them is
+                                # visible. We'll remove all boxes that we had to limit so much that their area is less than
+                                # `include_thresh` of the box area before limiting.
+                                before_area = (before_limiting[:,xmax] - before_limiting[:,xmin]) * (before_limiting[:,ymax] - before_limiting[:,ymin])
+                                after_area = (batch_y[i][:,xmax] - batch_y[i][:,xmin]) * (batch_y[i][:,ymax] - batch_y[i][:,ymin])
+                                if include_thresh == 0: batch_y[i] = batch_y[i][after_area > include_thresh * before_area] # If `include_thresh == 0`, we want to make sure that boxes with area 0 get thrown out, hence the ">" sign instead of the ">=" sign
+                                else: batch_y[i] = batch_y[i][after_area >= include_thresh * before_area] # Especially for the case `include_thresh == 1` we want the ">=" sign, otherwise no boxes would be left at all
 
-                if resize:
-                    batch_X[i] = cv2.resize(batch_X[i], dsize=(resize[1], resize[0]))
-                    batch_inverse_coord_transform[i,[ymin-ios,ymax-ios],1] *= (img_height / resize[0])
-                    batch_inverse_coord_transform[i,[xmin-ios,xmax-ios],1] *= (img_width / resize[1])
-                    if not ((batch_y is None) or (len(batch_y[i]) == 0)):
-                        batch_y[i][:,[ymin,ymax]] = batch_y[i][:,[ymin,ymax]] * (resize[0] / img_height)
-                        batch_y[i][:,[xmin,xmax]] = batch_y[i][:,[xmin,xmax]] * (resize[1] / img_width)
-                    img_width, img_height = resize # Updating these at this point is unnecessary, but it's one fewer source of error if this method gets expanded in the future.
+                    if resize:
+                        batch_X[i] = cv2.resize(batch_X[i], dsize=(resize[1], resize[0]))
+                        batch_inverse_coord_transform[i,[ymin-ios,ymax-ios],1] *= (img_height / resize[0])
+                        batch_inverse_coord_transform[i,[xmin-ios,xmax-ios],1] *= (img_width / resize[1])
+                        if not ((batch_y is None) or (len(batch_y[i]) == 0)):
+                            batch_y[i][:,[ymin,ymax]] = batch_y[i][:,[ymin,ymax]] * (resize[0] / img_height)
+                            batch_y[i][:,[xmin,xmax]] = batch_y[i][:,[xmin,xmax]] * (resize[1] / img_width)
+                        img_width, img_height = resize # Updating these at this point is unnecessary, but it's one fewer source of error if this method gets expanded in the future.
 
-                if gray:
-                    batch_X[i] = cv2.cvtColor(batch_X[i], cv2.COLOR_RGB2GRAY)
-                    if convert_to_3_channels:
-                        batch_X[i] = np.stack([batch_X[i]] * 3, axis=-1)
-                    else:
-                        batch_X[i] = np.expand_dims(batch_X[i], axis=-1)
+                    if gray:
+                        batch_X[i] = cv2.cvtColor(batch_X[i], cv2.COLOR_RGB2GRAY)
+                        if convert_to_3_channels:
+                            batch_X[i] = np.stack([batch_X[i]] * 3, axis=-1)
+                        else:
+                            batch_X[i] = np.expand_dims(batch_X[i], axis=-1)
 
             # CAUTION: Converting `batch_X` into an array will result in an empty batch if the images have varying sizes.
             #          At this point, all images must have the same size, otherwise you will get an error during training.

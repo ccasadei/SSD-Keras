@@ -5,7 +5,7 @@ from model.batch_generator import BatchGenerator
 from model.box_encode_decode_utils import SSDBoxEncoder
 
 
-def getGenerators(config, model, predictor_sizes):
+def get_generators(config, model, predictor_sizes):
     # istanzio i generatori di batch per train e validate
     train_dataset = BatchGenerator()
     val_dataset = BatchGenerator()
@@ -55,6 +55,7 @@ def getGenerators(config, model, predictor_sizes):
                                              shuffle=True,
                                              train=True,
                                              ssd_box_encoder=ssd_box_encoder,
+                                             augmentation=config.augmentation,
                                              equalize=True,
                                              brightness=(0.5, 2, 0.5),
                                              flip=0.5,
@@ -70,8 +71,9 @@ def getGenerators(config, model, predictor_sizes):
 
     val_generator = val_dataset.generate(batch_size=config.batch_size,
                                          shuffle=True,
-                                         train=True,
+                                         train=False,
                                          ssd_box_encoder=ssd_box_encoder,
+                                         augmentation=False,
                                          max_crop_and_resize=(size, size, 1, 3),
                                          random_crop=(size, size, 1, 3, 0.5))
 

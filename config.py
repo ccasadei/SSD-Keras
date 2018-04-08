@@ -15,6 +15,7 @@ class Config:
         self.train_val_split = config['train']['train_val_split']
         self.freeze_pops300 = config['train']['freeze_pops300']
         self.freeze_pops512 = config['train']['freeze_pops512']
+        self.augmentation = config['train']['augmentation']
 
         self.pretrained_weights_path = config['path']['pretrained_weights']
         self.base_weights_path300 = config['path']['base_weights300']

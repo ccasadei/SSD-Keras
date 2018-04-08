@@ -5,7 +5,7 @@ from keras.utils import plot_model
 
 from config import Config
 from model.callbacks import getCallbacks
-from model.generator import getGenerators
+from model.generator import get_generators
 from model.loss import getLoss
 from model.optimizer import getOptimizer
 from model.ssd300 import ssd_300
@@ -67,7 +67,7 @@ model.compile(loss=getLoss(), optimizer=getOptimizer(config.base_lr))
 if config.model_image:
     plot_model(model, to_file='model_image.jpg')
 
-train_generator, val_generator, n_train_samples, n_val_samples = getGenerators(config, model, predictor_sizes)
+train_generator, val_generator, n_train_samples, n_val_samples = get_generators(config, model, predictor_sizes)
 
 callbacks = getCallbacks(config)
 
