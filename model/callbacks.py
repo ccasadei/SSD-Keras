@@ -28,5 +28,10 @@ def get_callbacks(config):
                           verbose=1, mode='auto', epsilon=0.0001, cooldown=0, min_lr=0),
         EarlyStopping(monitor='val_loss',
                       min_delta=0.0001,
-                      patience=config.patience),
-        TensorBoard(log_dir=config.log_path)]
+                      patience=config.patience,
+                      verbose=1),
+        TensorBoard(log_dir=config.log_path, histogram_freq=1,
+                    batch_size=config.batch_size,
+                    write_graph=True,
+                    write_grads=True,
+                    write_images=True)]
