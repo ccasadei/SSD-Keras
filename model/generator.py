@@ -1,6 +1,8 @@
 import os
 import random
 
+import time
+
 from model.batch_generator import BatchGenerator
 from model.box_encode_decode_utils import SSDBoxEncoder
 
@@ -12,7 +14,8 @@ def get_generators(config, model, predictor_sizes):
 
     # ottengo l'elenco di tutte le annotations
     annotation_files = [os.path.splitext(f)[0] for f in os.listdir(config.annotations_path) if os.path.isfile(os.path.join(config.annotations_path, f))]
-    # mescola l'ordine delle righe
+    # mescola l'ordine delle righe (casuale, ma ripetibile)
+    random.seed = 19081974
     random.shuffle(annotation_files)
     max_id = int(config.train_val_split * len(annotation_files))
     train_ids = annotation_files[:max_id]
@@ -20,6 +23,8 @@ def get_generators(config, model, predictor_sizes):
         val_ids = annotation_files[max_id:]
     else:
         val_ids = None
+    # resetto il seed random con un numero dipendente dall'istante attuale in millisecondi
+    random.seed = int(round(time.time() * 1000))
 
     size = int(config.type)
 

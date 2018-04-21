@@ -62,7 +62,7 @@ if config.do_freeze_layers:
     model.summary()
 
 # compilo il model con lossfunction e ottimizzatore
-model.compile(loss=getLoss(), optimizer=getOptimizer(config.base_lr))
+model.compile(loss=getLoss(), optimizer=getOptimizer(config.base_lr), metrics=['accuracy'])
 
 if config.model_image:
     plot_model(model, to_file='model_image.jpg')
