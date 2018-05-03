@@ -22,9 +22,9 @@ config = Config('configSSD.json')
 # se non ci sono pesi specifici, uso i pesi base e le classi base (COCO)
 wname = 'BASE'
 if config.type == '300':
-    wpath = config.base_weights_path300
+    wpath = config.base_weights_path_300
 elif config.type == '512':
-    wpath = config.base_weights_path512
+    wpath = config.base_weights_path_512
 else:
     print("Tipo di architettura non consciuta '" + config.type + '"')
     exit()
@@ -153,7 +153,7 @@ for imgf in os.listdir(config.test_images_path):
 
         # decodifico il risultato restituendo solo i positivi
         y_pred_decoded = decode_y(y_pred,
-                                  confidence_thresh=0.30,
+                                  confidence_thresh=0.1,
                                   iou_threshold=0.45,
                                   top_k=200,
                                   normalize_coords=True,

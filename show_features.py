@@ -32,9 +32,9 @@ config = Config('configSSD.json')
 # se non ci sono pesi specifici, uso i pesi base e le classi base (COCO)
 wname = "BASE"
 if config.type == '300':
-    wpath = config.base_weights_path300
+    wpath = config.base_weights_path_300
 elif config.type == '512':
-    wpath = config.base_weights_path512
+    wpath = config.base_weights_path_512
 else:
     print("Tipo di architettura non consciuta '" + config.type + '"')
     exit()
@@ -149,8 +149,8 @@ img_width = model.input_shape[2]
 # carico le immagini originali e quelle ridimensionate in due array
 # ne prendo una alla volta per minimizzare la memoria GPU necessaria
 for imgf in os.listdir(config.test_images_path):
-    if imgf != '0002.jpg':
-        continue
+    # if imgf != '0002.jpg':
+    #     continue
     imgfp = os.path.join(config.test_images_path, imgf)
     if os.path.isfile(imgfp):
         orig_img = cv2.resize(cv2.imread(imgfp), (img_height, img_width))
@@ -160,6 +160,8 @@ for imgf in os.listdir(config.test_images_path):
         input_image = np.array(input_image)
         cv2.imshow('Immagine', orig_img)
 
+        skip_img = False
+
         # mi scorro tutti i layer e lavoro su quelli convoluzionali
         for layer in layer_dict:
             if isinstance(layer_dict[layer], Conv2D):
@@ -167,7 +169,7 @@ for imgf in os.listdir(config.test_images_path):
                 get_layer_output = K.function([model.input],
                                               [layer_dict[layer].output])
 
-                # normalizzo e porto poi nel range 0..255 i valori dell'immagine
+                # normalizzo e porto poi nel range 0..1 i valori dell'immagine
                 intermediate_output = (get_layer_output([input_image])[0])
                 intermediate_output = intermediate_output - intermediate_output.min()
                 intermediate_output = intermediate_output / intermediate_output.max()
@@ -177,19 +179,28 @@ for imgf in os.listdir(config.test_images_path):
                 while filter_idx < layer_dict[layer].output.shape[3]:
 
                     filter_img = intermediate_output[0, :, :, filter_idx]
-                    cv2.imshow('Filtro', filter_img)
+                    n_filter_img = np.array(filter_img * 255, dtype=np.uint8)
+                    cm_filter_img = cv2.applyColorMap(n_filter_img, cv2.COLORMAP_JET)
+                    cv2.imshow('Filtro', cm_filter_img)
 
                     # attendo la pressione di un tasto
                     # 'q' esce completamenet
+                    # 'm' si sposta sulla prossima immagine
                     # 'n' si sposta sul prossimo layer
                     # '+' avanza di un filtro
-                    # '-' indietreggia di un filtro--
+                    # '-' indietreggia di un filtro
                     k = cv2.waitKey()
                     if k == ord('q'):
                         exit(0)
                     if k == ord('n'):
                         break
+                    if k == ord('m'):
+                        skip_img = True
+                        break
                     if k == ord('+'):
                         filter_idx += 1
                     if k == ord('-'):
                         filter_idx = max(0, filter_idx - 1)
+
+            if skip_img:
+                break

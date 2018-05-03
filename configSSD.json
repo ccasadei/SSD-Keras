@@ -1,21 +1,21 @@
 {
   "train": {
-    "batch_size": 10,
+    "batch_size": 4,
     "epochs": 10000,
-    "base_lr": 1e-6,
+    "base_lr": 1e-8,
     "patience": 0,
     "do_freeze_layers": true,
-    "freeze_pops300": 0,
-    "freeze_pops512": 0,
-    "train_val_split": 0.8,
+    "freeze_layer_stop_name_300": "conv6_1",
+    "freeze_layer_stop_name_512": "conv6_1",
+    "train_val_split": 0.9,
     "augmentation": false
   },
   "path": {
     "pretrained_weights": "./h5/pretrained.h5",
-    "base_weights300": "./h5/base300.h5",
-    "base_weights512": "./h5/base512.h5",
+    "base_weights_300": "./h5/base300.h5",
+    "base_weights_512": "./h5/base512.h5",
     "trained_weights": "./h5/result.h5",
-    "chkpnt_weights": "./h5/chkpnt_best.h5",
+    "chkpnt_weights": "./h5/chkpnt_best_{val_loss:.4f}.h5",
     "images": "../../dataset/person_calling/images/",
     "annotations": "../../dataset/person_calling/annotations/",
     "test_images": "../../dataset/test/",
@@ -24,7 +24,7 @@
   },
   "model": {
     "model_image": false,
-    "type": "300",
+    "type": "512",
     "COMMENTO": "SERVE IL BACKGROUND COME PRIMA CLASSE!!",
     "classes": [
       "background",

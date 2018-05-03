@@ -11,7 +11,7 @@ def get_callbacks(config):
                         mode='min',
                         period=1),
         # LearningRateScheduler(lr_schedule),
-        ReduceLROnPlateau(monitor='val_loss', factor=0.9,
+        ReduceLROnPlateau(monitor='val_loss', factor=0.5,
                           patience=max(5, config.patience / 10),
                           verbose=1, mode='min', epsilon=0.0001, cooldown=0, min_lr=0),
         TensorBoard(log_dir=config.log_path, histogram_freq=0,

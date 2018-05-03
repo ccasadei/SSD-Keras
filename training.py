@@ -17,20 +17,21 @@ config = Config('configSSD.json')
 # creazione del modello
 wpath = None
 if config.type == '300':
-    wpath = config.base_weights_path300
+    wpath = config.base_weights_path_300
     model, bodyLayers, predictor_sizes = ssd_300(n_classes=len(config.classes) - 1,  # NOTA: qui tolgo la classe di background nel conteggio
                                                  scales=config.scales,
                                                  aspect_ratios_per_layer=config.aspect_ratios_per_layer,
                                                  steps=config.steps,
                                                  offsets=config.offsets)
-
+    freeze_layer_stop_name = config.freeze_layer_stop_name_300
 else:
-    wpath = config.base_weights_path512
+    wpath = config.base_weights_path_512
     model, bodyLayers, predictor_sizes = ssd_512(n_classes=len(config.classes) - 1,  # NOTA: qui tolgo la classe di background nel conteggio
                                                  scales=config.scales,
                                                  aspect_ratios_per_layer=config.aspect_ratios_per_layer,
                                                  steps=config.steps,
                                                  offsets=config.offsets)
+    freeze_layer_stop_name = config.freeze_layer_stop_name_512
 
 model.summary()
 
@@ -48,15 +49,14 @@ else:
 
 # eseguo il freeze dei layer più profondi
 if config.do_freeze_layers:
-    if config.type == '300':
-        freeze_pops = config.freeze_pops300
-    else:
-        freeze_pops = config.freeze_pops512
-
-    for l in bodyLayers[:len(bodyLayers) - freeze_pops]:
-        model.get_layer(l).trainable = False
+    conta = 0
+    for l in bodyLayers:
+        if l.name == freeze_layer_stop_name:
+            break
+        l.trainable = False
+        conta += 1
     print("")
-    print("Eseguito freeze di " + str(len(bodyLayers) - freeze_pops) + " layers")
+    print("Eseguito freeze di " + str(conta) + " layers")
     print("Nuovo summary dopo FREEZE")
     print("")
     model.summary()
