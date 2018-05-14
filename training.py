@@ -51,9 +51,9 @@ else:
 if config.do_freeze_layers:
     conta = 0
     for l in bodyLayers:
-        if l.name == freeze_layer_stop_name:
+        if l == freeze_layer_stop_name:
             break
-        l.trainable = False
+        model.get_layer(l).trainable = False
         conta += 1
     print("")
     print("Eseguito freeze di " + str(conta) + " layers")
